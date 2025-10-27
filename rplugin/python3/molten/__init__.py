@@ -747,6 +747,7 @@ class Molten:
             kernel = args[1]
         else:
             path = path.replace("%k", r"\%k")
+            path = path.replace(" ", r"\ ")
             self.kernel_check(f"MoltenImportOutput {path} %k", buf)
             return
 
@@ -773,6 +774,7 @@ class Molten:
             kernel = args[1]
         else:
             path = path.replace("%k", r"\%k")
+            path = path.replace(" ", r"\ ")
             self.kernel_check(f"MoltenExportOutput{'!' if bang else ''} {path} %k", buf)
             return
 
