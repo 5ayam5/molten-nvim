@@ -172,21 +172,23 @@ def export_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str, overwrite: b
 
             if compare_contents(nvim, nb_cell, code_cell, lang):
                 matched = True
-                outputs = [
-                    nbformat.v4.new_output(
+                outputs = []
+                for chunk in output.output.chunks:
+                    if "output_type" in chunk.extras.keys():
+                        chunk.extras.pop("output_type")
+                    if chunk.jupyter_metadata is None:
+                        outputs.append(nbformat.v4.new_output(
                         chunk.output_type,
                         chunk.jupyter_data,
                         **chunk.extras,
-                    )
-                    if chunk.jupyter_metadata is None
-                    else nbformat.v4.new_output(
+                    ))
+                    else:
+                        outputs.append(nbformat.v4.new_output(
                         chunk.output_type,
                         chunk.jupyter_data,
                         metadata=chunk.jupyter_metadata,
                         **chunk.extras,
-                    )
-                    for chunk in output.output.chunks
-                ]
+                    ))
                 nb_cell["outputs"] = outputs
                 nb_cell["execution_count"] = output.output.execution_count
                 break  # break out of the while loop
