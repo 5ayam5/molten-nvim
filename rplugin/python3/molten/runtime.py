@@ -32,7 +32,6 @@ class JupyterRuntime:
     kernel_client: jupyter_client.KernelClient | JupyterAPIClient  # type: ignore
 
     allocated_files: List[str]
-    active_executions: Dict[str, Output]  # msg_id -> Output mapping for concurrent execution
 
     options: MoltenOptions
     nvim: Nvim
@@ -82,7 +81,6 @@ class JupyterRuntime:
             self.kernel_client.load_connection_file(connection_file=kernel_file)
 
         self.allocated_files = []
-        self.active_executions = {}
         self.options = options
 
     def is_ready(self) -> bool:
@@ -104,14 +102,8 @@ class JupyterRuntime:
         self.state = RuntimeState.STARTING
         self.kernel_manager.restart_kernel()
 
-    def run_code(self, code: str) -> str:
-        """Execute code and return the msg_id for tracking"""
-        msg_id = self.kernel_client.execute(code)
-        return msg_id
-
-    def register_execution(self, msg_id: str, output: Output) -> None:
-        """Register a msg_id with its output destination for concurrent execution"""
-        self.active_executions[msg_id] = output
+    def run_code(self, code: str) -> None:
+        self.kernel_client.execute(code)
 
     @contextmanager
     def _alloc_file(
@@ -228,27 +220,7 @@ class JupyterRuntime:
             except RuntimeError:
                 return False
 
-        # If output is provided (legacy single-output mode), process only that output
-        if output is not None:
-            while True:
-                try:
-                    message = self.kernel_client.get_iopub_msg(timeout=0)
-
-                    if "content" not in message or "msg_type" not in message:
-                        continue
-
-                    did_stuff_now = self._tick_one(output, message["msg_type"], message["content"])
-                    did_stuff = did_stuff or did_stuff_now
-
-                    if output.status == OutputStatus.DONE:
-                        break
-                except EmptyQueueException:
-                    break
-
-            return did_stuff
-
-        # New concurrent execution mode: route messages by msg_id
-        if not self.active_executions:
+        if output is None:
             return did_stuff
 
         while True:
@@ -258,22 +230,11 @@ class JupyterRuntime:
                 if "content" not in message or "msg_type" not in message:
                     continue
 
-                # Route message to correct output based on parent_header
-                parent_header = message.get("parent_header", {})
-                msg_id = parent_header.get("msg_id")
-
-                if msg_id not in self.active_executions:
-                    # Message from unknown execution - skip it
-                    continue
-
-                target_output = self.active_executions[msg_id]
-                did_stuff_now = self._tick_one(target_output, message["msg_type"], message["content"])
+                did_stuff_now = self._tick_one(output, message["msg_type"], message["content"])
                 did_stuff = did_stuff or did_stuff_now
 
-                # Clean up completed executions
-                if target_output.status == OutputStatus.DONE:
-                    del self.active_executions[msg_id]
-
+                if output.status == OutputStatus.DONE:
+                    break
             except EmptyQueueException:
                 break
 
