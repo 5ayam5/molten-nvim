@@ -1,20 +1,20 @@
+import hashlib
 from contextlib import AbstractContextManager
 from datetime import datetime
-from typing import IO, Callable, List, Optional, Dict, Tuple
 from queue import Queue
-import hashlib
+from typing import IO, Callable, Dict, List, Optional, Tuple
 
 from pynvim import Nvim
 from pynvim.api import Buffer
-from molten.code_cell import CodeCell
 
-from molten.options import MoltenOptions
+from molten.code_cell import CodeCell
 from molten.images import Canvas
-from molten.position import Position
-from molten.utils import notify_error, notify_info, notify_warn
+from molten.options import MoltenOptions
 from molten.outputbuffer import OutputBuffer
 from molten.outputchunks import ImageOutputChunk, OutputChunk, OutputStatus
+from molten.position import Position
 from molten.runtime import JupyterRuntime
+from molten.utils import notify_error, notify_info, notify_warn
 
 
 class MoltenKernel:
@@ -210,7 +210,7 @@ class MoltenKernel:
 
     def _check_if_done_running(self) -> None:
         # TODO: refactor
-        is_idle = (self.current_output is None or not self.current_output in self.outputs) or (
+        is_idle = (self.current_output is None or self.current_output not in self.outputs) or (
             self.current_output is not None
             and self.outputs[self.current_output].output.status == OutputStatus.DONE
         )
@@ -222,7 +222,7 @@ class MoltenKernel:
         self._check_if_done_running()
 
         was_ready = self.runtime.is_ready()
-        if self.current_output is None or not self.current_output in self.outputs:
+        if self.current_output is None or self.current_output not in self.outputs:
             did_stuff = self.runtime.tick(None)
         else:
             output = self.outputs[self.current_output].output

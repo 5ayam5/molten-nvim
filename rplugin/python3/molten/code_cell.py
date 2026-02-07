@@ -2,6 +2,7 @@ from functools import total_ordering
 from typing import List, Union
 
 from pynvim import Nvim
+
 from molten.position import DynamicPosition, Position
 
 
@@ -62,7 +63,7 @@ class CodeCell:
         )
 
         if len(lines) == 0:
-            return "" # apparently this can happen...
+            return ""  # apparently this can happen...
         if len(lines) == 1:
             return lines[0][self.begin.colno : self.end.colno]
         else:

@@ -1,12 +1,13 @@
+import os
 from typing import Dict
+
 from pynvim.api import Buffer, Nvim
+
 from molten.code_cell import CodeCell
 from molten.moltenbuffer import MoltenKernel
-import os
 from molten.outputbuffer import OutputBuffer
 from molten.outputchunks import ErrorOutputChunk, Output, OutputStatus, to_outputchunk
 from molten.position import DynamicPosition
-
 from molten.utils import MoltenException, notify_error, notify_info, notify_warn
 
 NOTEBOOK_VERSION = 4
@@ -67,7 +68,9 @@ def import_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str):
                     output.status = OutputStatus.NEW
 
                 for output_data in cell["outputs"]:
-                    m_chunk, success = handle_output_types(nvim, output_data.get("output_type"), kernel, output_data)
+                    m_chunk, success = handle_output_types(
+                        nvim, output_data.get("output_type"), kernel, output_data
+                    )
                     output.chunks.append(m_chunk)
                     output.success &= success
 
@@ -115,6 +118,7 @@ def import_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str):
             nvim, f"Failed to load output for {failed} running cell that would be overridden"
         )
 
+
 def handle_output_types(nvim: Nvim, output_type: str, kernel: MoltenKernel, output_data):
     chunk = None
     success = True
@@ -123,12 +127,14 @@ def handle_output_types(nvim: Nvim, output_type: str, kernel: MoltenKernel, outp
             chunk = to_outputchunk(
                 nvim,
                 kernel.runtime._alloc_file,
-                { "text/plain": output_data.get("text") },
+                {"text/plain": output_data.get("text")},
                 output_data.get("metadata"),
                 kernel.options,
             )
         case "error":
-            chunk = ErrorOutputChunk(output_data["ename"], output_data["evalue"], output_data["traceback"])
+            chunk = ErrorOutputChunk(
+                output_data["ename"], output_data["evalue"], output_data["traceback"]
+            )
             chunk.extras = output_data
             success = False
         case _:
@@ -140,6 +146,7 @@ def handle_output_types(nvim: Nvim, output_type: str, kernel: MoltenKernel, outp
                 kernel.options,
             )
     return chunk, success
+
 
 def export_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str, overwrite: bool):
     """Export outputs of the current file/kernel to a .ipynb file with the given name."""
@@ -177,18 +184,22 @@ def export_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str, overwrite: b
                     if "output_type" in chunk.extras.keys():
                         chunk.extras.pop("output_type")
                     if chunk.jupyter_metadata is None:
-                        outputs.append(nbformat.v4.new_output(
-                        chunk.output_type,
-                        chunk.jupyter_data,
-                        **chunk.extras,
-                    ))
+                        outputs.append(
+                            nbformat.v4.new_output(
+                                chunk.output_type,
+                                chunk.jupyter_data,
+                                **chunk.extras,
+                            )
+                        )
                     else:
-                        outputs.append(nbformat.v4.new_output(
-                        chunk.output_type,
-                        chunk.jupyter_data,
-                        metadata=chunk.jupyter_metadata,
-                        **chunk.extras,
-                    ))
+                        outputs.append(
+                            nbformat.v4.new_output(
+                                chunk.output_type,
+                                chunk.jupyter_data,
+                                metadata=chunk.jupyter_metadata,
+                                **chunk.extras,
+                            )
+                        )
                 nb_cell["outputs"] = outputs
                 nb_cell["execution_count"] = output.output.execution_count
                 break  # break out of the while loop

@@ -1,20 +1,19 @@
+import re
+from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager
+from datetime import datetime
+from enum import Enum
 from typing import (
-    Optional,
-    Tuple,
-    List,
-    Dict,
+    IO,
     Any,
     Callable,
-    IO,
+    Dict,
+    List,
+    Optional,
+    Tuple,
 )
-from contextlib import AbstractContextManager
-from enum import Enum
-from abc import ABC, abstractmethod
-import re
-from datetime import datetime
 
 from pynvim import Nvim
-
 
 from molten.images import Canvas
 from molten.options import MoltenOptions
@@ -48,12 +47,7 @@ ANSI_CODE_REGEX = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 
 def clean_up_text(text: str) -> str:
-    return (
-        ANSI_CODE_REGEX
-        .sub("", text)
-        .replace("\r\n", "\n")
-        .replace("\n\n", "\n")
-    )
+    return ANSI_CODE_REGEX.sub("", text).replace("\r\n", "\n").replace("\n\n", "\n")
 
 
 class TextOutputChunk(OutputChunk):
@@ -68,12 +62,12 @@ class TextOutputChunk(OutputChunk):
 
     def place(
         self,
-        _bufnr: int,
+        bufnr: int,
         options: MoltenOptions,
         col: int,
-        _lineno: int,
+        lineno: int,
         shape: Tuple[int, int, int, int],
-        _canvas: Canvas,
+        canvas: Canvas,
         hard_wrap: bool,
         winnr: int | None = None,
     ) -> Tuple[str, int]:
@@ -152,14 +146,15 @@ class ImageOutputChunk(OutputChunk):
         self,
         bufnr: int,
         options: MoltenOptions,
-        _col: int,
+        col: int,
         lineno: int,
-        _shape: Tuple[int, int, int, int],
+        shape: Tuple[int, int, int, int],
         canvas: Canvas,
-        virtual: bool,
+        hard_wrap: bool,
         winnr: int | None = None,
     ) -> Tuple[str, int]:
         loc = options.image_location
+        virtual = hard_wrap
         if not (loc == "both" or (loc == "virt" and virtual) or (loc == "float" and not virtual)):
             return "", 0
 
@@ -171,9 +166,14 @@ class ImageOutputChunk(OutputChunk):
             bufnr,
             winnr,
         )
+        if self.img_identifier is None:
+            return "", 0
+
         # images are rendered into virtual lines following the current line,
         # which also needs to exist as the extmark is placed there
-        return " \n", canvas.img_size(self.img_identifier)["height"]
+        return f"[molten-output] image at {self.img_path}\n", canvas.img_size(self.img_identifier)[
+            "height"
+        ]
 
 
 class OutputStatus(Enum):
@@ -216,7 +216,6 @@ class Output:
         self.cur_line = []
         self.cursor_col = 0
 
-
     def process_text_chunk(self, chunk: TextOutputChunk):
         """Process new text chunk to properly handle control characters.
         May modify already existing chunks if needed."""
@@ -230,21 +229,23 @@ class Output:
                     prev_pos = i
                     break
             if prev_chunk != None:
-                prev_lines = prev_chunk.text.split('\n')
+                prev_lines = prev_chunk.text.split("\n")
                 if len(prev_lines) > 0:
-                    prev_chunk.text = '\n'.join(prev_lines[:-1]) + ('\n' if len(prev_lines[:-1]) > 0 else '')
-                    prev_chunk.jupyter_data = {'text/plain': prev_chunk.text}
+                    prev_chunk.text = "\n".join(prev_lines[:-1]) + (
+                        "\n" if len(prev_lines[:-1]) > 0 else ""
+                    )
+                    prev_chunk.jupyter_data = {"text/plain": prev_chunk.text}
 
         lines = []
         for c in chunk.text:
             match c:
-                case '\r':
+                case "\r":
                     self.cursor_col = 0
-                case '\b':
+                case "\b":
                     self.cur_line = self.cur_line[:-1]
                     self.cursor_col = self.cursor_col - 1 + (self.cursor_col == 0)
-                case '\n':
-                    lines.append(''.join(self.cur_line))
+                case "\n":
+                    lines.append("".join(self.cur_line))
                     self.cur_line = []
                     self.cursor_col = 0
                 case _:
@@ -253,17 +254,18 @@ class Output:
                     else:
                         self.cur_line[self.cursor_col] = c
                     self.cursor_col += 1
-        lines.append(''.join(self.cur_line))
+        lines.append("".join(self.cur_line))
 
         if prev_chunk:
             self.chunks.pop(prev_pos)
-            chunk.text = prev_chunk.text + '\n'.join(lines)
-            chunk.jupyter_data = {'text/plain': chunk.text}
+            chunk.text = prev_chunk.text + "\n".join(lines)
+            chunk.jupyter_data = {"text/plain": chunk.text}
         else:
-            chunk.text = '\n'.join(lines)
-            chunk.jupyter_data = {'text/plain': chunk.text}
-        if chunk.text == '':
+            chunk.text = "\n".join(lines)
+            chunk.jupyter_data = {"text/plain": chunk.text}
+        if chunk.text == "":
             self.chunks.pop()
+
 
 def to_outputchunk(
     nvim: Nvim,
@@ -299,12 +301,11 @@ def to_outputchunk(
             return _to_image_chunk(path)
 
     def _from_application_plotly(figure_json: Any) -> OutputChunk:
-        from plotly.io import from_json
-
         # NOTE: import this to cause an import exception which we catch. instead of a different
         # error in `write_image`
-        import kaleido  # type: ignore
         import json
+
+        from plotly.io import from_json
 
         figure = from_json(json.dumps(figure_json))
 

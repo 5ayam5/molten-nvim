@@ -1,22 +1,23 @@
 import json
 import os
-from typing import Any, Dict, List, Optional, Tuple
 from itertools import chain
+from typing import Any, Dict, List, Optional, Tuple
 
 import pynvim
+from pynvim import Nvim
 from pynvim.api import Buffer
+
 from molten.code_cell import CodeCell
-from molten.images import Canvas, get_canvas_given_provider, WeztermCanvas
+from molten.images import Canvas, WeztermCanvas, get_canvas_given_provider
 from molten.info_window import create_info_window
 from molten.ipynb import export_outputs, get_default_import_export_file, import_outputs
-from molten.save_load import MoltenIOError, get_default_save_file, load, save
 from molten.moltenbuffer import MoltenKernel
 from molten.options import MoltenOptions
 from molten.outputbuffer import OutputBuffer
 from molten.position import DynamicPosition, Position
 from molten.runtime import get_available_kernels
+from molten.save_load import MoltenIOError, get_default_save_file, load, save
 from molten.utils import MoltenException, notify_error, notify_info, notify_warn, nvimui
-from pynvim import Nvim
 
 
 @pynvim.plugin
@@ -135,10 +136,7 @@ class Molten:
                 molten_kernel.clear_interface()
                 molten_kernel.clear_open_output_windows()
 
-    def _clear_interface(
-        self,
-        molten_kernels: list[MoltenKernel] | None = None
-    ) -> None:
+    def _clear_interface(self, molten_kernels: list[MoltenKernel] | None = None) -> None:
         if not self.initialized:
             return
 
@@ -308,7 +306,7 @@ class Molten:
         # NOTE: Assert is generally a bad idea to use. Instead it is better to call custom error, or something like that.
         # Also, assert can be disabled with `-O` or `-OO` flags.
         # This is not a production solution
-        assert kernels is not None  
+        assert kernels is not None
 
         self._clear_interface(kernels)
 
@@ -544,7 +542,7 @@ class Molten:
         start_col, end_col = 1, 0
         kernel = None
         span = args
-        if type(args[0]) == str:
+        if type(args[0]) is str:
             kernel = args[0]
             span = args[1:]
 
@@ -610,9 +608,10 @@ class Molten:
             )
         elif len(kernels) == 1:
             import re
-            pat = r'(^|[^\\])%k'
+
+            pat = r"(^|[^\\])%k"
             c = re.sub(pat, lambda x: x[1] + kernels[0].kernel_id, command)
-            c = c.replace(r"\%k", "%k") # un-escape escaped chars
+            c = c.replace(r"\%k", "%k")  # un-escape escaped chars
             self.nvim.command(c)
         else:
             PROMPT = "Please select a kernel:"

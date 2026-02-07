@@ -1,10 +1,10 @@
-from typing import Dict, Set
 from abc import ABC, abstractmethod
+from typing import Dict, Set
 
 from pynvim import Nvim
-from molten.options import MoltenOptions
 
-from molten.utils import notify_warn, MoltenException
+from molten.options import MoltenOptions
+from molten.utils import MoltenException, notify_warn
 
 
 class Canvas(ABC):
@@ -36,7 +36,7 @@ class Canvas(ABC):
         """
 
     @abstractmethod
-    def img_size(self, identifier: str) -> Dict[str, int]:
+    def img_size(self, identifier: str | dict[str, str]) -> Dict[str, int]:
         """
         Get the height of an image in terminal rows.
         """
@@ -50,7 +50,7 @@ class Canvas(ABC):
         y: int,
         bufnr: int,
         winnr: int | None = None,
-    ) -> str:
+    ) -> str | dict[str, str] | None:
         """
         Add an image to the canvas.
         Takes effect after a call to present()
@@ -72,7 +72,7 @@ class Canvas(ABC):
         """
 
     @abstractmethod
-    def remove_image(self, identifier: str) -> None:
+    def remove_image(self, identifier: str | dict[str, str]) -> None:
         """
         Remove an image from the canvas. In practice this is just hiding the image
         Takes effect after a call to present()
@@ -96,21 +96,21 @@ class NoCanvas(Canvas):
     def present(self) -> None:
         pass
 
-    def img_size(self, _indentifier: str) -> Dict[str, int]:
+    def img_size(self, identifier: str | dict[str, str]) -> Dict[str, int]:
         return {"height": 0, "width": 0}
 
     def add_image(
         self,
-        _path: str,
-        _identifier: str,
-        _x: int,
-        _y: int,
-        _bufnr: int,
-        _winnr: int,
+        path: str,
+        identifier: str,
+        x: int,
+        y: int,
+        bufnr: int,
+        winnr: int | None = None,
     ) -> None:
         pass
 
-    def remove_image(self, _identifier: str) -> None:
+    def remove_image(self, identifier: str | dict[str, str]) -> None:
         pass
 
 
@@ -153,7 +153,7 @@ class ImageNvimCanvas(Canvas):
         self.to_make_invisible.clear()
         self.to_make_visible.clear()
 
-    def img_size(self, identifier: str) -> Dict[str, int]:
+    def img_size(self, identifier: str | dict[str, str]) -> Dict[str, int]:
         return self.image_api.image_size(identifier)
 
     def add_image(
@@ -179,7 +179,8 @@ class ImageNvimCanvas(Canvas):
         self.to_make_visible.add(img)
         return img
 
-    def remove_image(self, identifier: str) -> None:
+    def remove_image(self, identifier: str | dict[str, str]) -> None:
+        assert isinstance(identifier, str)
         self.to_make_invisible.add(identifier)
 
 
@@ -229,24 +230,24 @@ class WeztermCanvas(Canvas):
         self.to_make_invisible.clear()
         self.to_make_visible.clear()
 
-    def img_size(self, _indentifier: str) -> Dict[str, int]:
+    def img_size(self, identifier: str | dict[str, str]) -> Dict[str, int]:
         return {"height": 0, "width": 0}
 
     def add_image(
         self,
         path: str,
         identifier: str,
-        _x: int,
-        _y: int,
-        _bufnr: int,
-        _winnr: int,
+        x: int,
+        y: int,
+        bufnr: int,
+        winnr: int | None = None,
     ) -> str | dict[str, str]:
         """Adds an image to the queue to be rendered by Wezterm via the place method"""
         img = {"path": path, "id": identifier}
         self.to_make_visible.add(img["path"])
         return img
 
-    def remove_image(self, identifier: str) -> None:
+    def remove_image(self, identifier: str | dict[str, str]) -> None:
         pass
 
     def wezterm_split(self):
@@ -295,7 +296,7 @@ class SnacksCanvas(Canvas):
         self.to_make_invisible.clear()
         self.to_make_visible.clear()
 
-    def img_size(self, identifier: str) -> Dict[str, int]:
+    def img_size(self, identifier: str | dict[str, str]) -> Dict[str, int]:
         return self.snacks_api.image_size(identifier)
 
     def add_image(
@@ -307,7 +308,7 @@ class SnacksCanvas(Canvas):
         bufnr: int,
         winnr: int | None = None,
     ) -> str:
-        img = self.snacks_api.from_file(
+        img: str = self.snacks_api.from_file(
             path,
             {
                 "id": identifier,
@@ -319,7 +320,8 @@ class SnacksCanvas(Canvas):
         self.to_make_visible.add(img)
         return img
 
-    def remove_image(self, identifier: str) -> None:
+    def remove_image(self, identifier: str | dict[str, str]) -> None:
+        assert isinstance(identifier, str)
         self.to_make_invisible.add(identifier)
 
 
