@@ -53,12 +53,23 @@ def import_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str):
             if len(nb_contents) == 0:
                 break  # out of while loop
 
-            # HACK: assumes that magic starts with '%'
+            # HACK: assumes that magic starts with '%' or '!'
             # (which is true for ipython, and most common use case)
             has_magic = nb_contents[nb_line].lstrip().startswith("%")
             magic_start = buffer_contents[buf_line].find("%")
-            if (not has_magic and nb_contents[nb_line] != buffer_contents[buf_line]) or (
-                has_magic and nb_contents[nb_line] != buffer_contents[buf_line][magic_start:]
+            has_shell_magic = nb_contents[nb_line].lstrip().startswith("!")
+            shell_magic_start = buffer_contents[buf_line].find("!")
+            if (
+                (
+                    not has_magic
+                    and not has_shell_magic
+                    and nb_contents[nb_line] != buffer_contents[buf_line]
+                )
+                or (has_magic and nb_contents[nb_line] != buffer_contents[buf_line][magic_start:])
+                or (
+                    has_shell_magic
+                    and nb_contents[nb_line] != buffer_contents[buf_line][shell_magic_start:]
+                )
             ):
                 # move on to the next buffer line, but reset the nb_line
                 nb_line = 0
@@ -246,7 +257,11 @@ def compare_contents(nvim: Nvim, nb_cell, code_cell: CodeCell, lang: str) -> boo
         marker = comment_string.split("%s")[0].strip()
         pattern = f"^{escape(marker)}\\s*(.*)$"
 
-        lines_with_magic = [i for (i, line) in enumerate(clean_nb) if line.strip().startswith("%")]
+        lines_with_magic = [
+            i
+            for (i, line) in enumerate(clean_nb)
+            if line.strip().startswith("%") or line.strip().startswith("!")
+        ]
         for line in lines_with_magic:
             if line < len(molten_contents):
                 found = match(pattern, molten_contents[line])

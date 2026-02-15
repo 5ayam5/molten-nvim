@@ -342,11 +342,14 @@ class Molten:
         commentstring: str = self.nvim.current.buffer.options["commentstring"]
         if commentstring:
             lines = code.splitlines()
-            marker = commentstring.replace("%s", "%")
+            marker_magic = commentstring.replace("%s", "%")
+            marker_shell_magic = commentstring.replace("%s", "!")
             for i, line in enumerate(lines):
                 stripped = line.lstrip()
-                if stripped.startswith(marker):
-                    lines[i] = line[line.find(marker) + len(marker) - 1 :]
+                if stripped.startswith(marker_magic):
+                    lines[i] = line[line.find(marker_magic) + len(marker_magic) - 1 :]
+                elif stripped.startswith(marker_shell_magic):
+                    lines[i] = line[line.find(marker_shell_magic) + len(marker_shell_magic) - 1 :]
             code = "\n".join(lines)
 
         # delete overlapping cells from other kernels. Maintains the invariant that all code cells
