@@ -14,9 +14,9 @@ snacks_api.from_file = function(path, opts)
     inline = true,
     pos = { opts.y, opts.x },
     -- Control max size by snacks config
-    -- FIX check if config has been set by user, use default instead
+    -- FIX: check if config has been set by user, use default instead
     max_width = snacks.config.image.doc and snacks.config.image.doc.max_width or 80,
-    max_height = snacks.config.image.doc and  snacks.config.image.doc.max_height or 40,
+    max_height = snacks.config.image.doc and snacks.config.image.doc.max_height or 40,
   }
   opts.placement = nil
 

@@ -171,9 +171,9 @@ class ImageOutputChunk(OutputChunk):
 
         # images are rendered into virtual lines following the current line,
         # which also needs to exist as the extmark is placed there
-        return f"[molten-output] image at {self.img_path}\n", canvas.img_size(self.img_identifier)[
-            "height"
-        ]
+        return f"\n[molten-output] image at {self.img_path}\n", canvas.img_size(
+            self.img_identifier
+        )["height"]
 
 
 class OutputStatus(Enum):

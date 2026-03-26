@@ -60,6 +60,7 @@ class JupyterRuntime:
                 jupyter_client.blocking.client.BlockingKernelClient,
             )
             self.kernel_client.start_channels()
+            assert type(self.kernel_manager) is jupyter_client.manager.KernelManager
             self.kernel_client.connection_file = (
                 f"{self.kernel_client.data_dir}/runtime/kernel-{self.kernel_manager.kernel_id}.json"
             )
@@ -78,6 +79,7 @@ class JupyterRuntime:
                 kernel_name=kernel_json["kernel_name"]
             )
             self.kernel_client = self.kernel_manager.client()
+            assert type(self.kernel_client) is jupyter_client.blocking.client.BlockingKernelClient
             self.kernel_client.load_connection_file(connection_file=kernel_file)
 
         self.allocated_files = []
@@ -153,7 +155,9 @@ class JupyterRuntime:
             return True
         elif message_type == "status":
             execution_state = content["execution_state"]
-            assert execution_state != "starting"
+            if execution_state == "starting":
+                self.state = RuntimeState.STARTING
+                return True
             if execution_state == "idle":
                 self.state = RuntimeState.IDLE
                 output.status = OutputStatus.DONE
