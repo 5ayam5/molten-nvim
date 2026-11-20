@@ -1,8 +1,8 @@
 import os
+from dataclasses import dataclass
+from typing import List, Literal, Optional, Union
 
 from pynvim import Nvim
-from typing import Literal, Optional, Union, List
-from dataclasses import dataclass
 
 from molten.utils import notify_error
 

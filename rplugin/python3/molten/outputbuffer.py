@@ -1,12 +1,12 @@
 from datetime import datetime
-from typing import Any, List, Optional, Tuple, Union, Callable
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 from pynvim import Nvim
 from pynvim.api import Buffer, Window
 
 from molten.images import Canvas
-from molten.outputchunks import ImageOutputChunk, Output, OutputStatus
 from molten.options import MoltenOptions
+from molten.outputchunks import ImageOutputChunk, Output, OutputStatus
 from molten.position import DynamicPosition, Position
 from molten.utils import notify_error
 
@@ -122,7 +122,7 @@ class OutputBuffer:
             time = ""
 
         if output.status == OutputStatus.NEW:
-            return f"Out[_]: Never Run"
+            return "Out[_]: Never Run"
         else:
             return f"{old}Out[{execution_count}]: {status} {time}".rstrip()
 
@@ -237,10 +237,6 @@ class OutputBuffer:
         # Remove trailing empty lines
         while len(lines) > 0 and lines[-1] == "":
             lines.pop()
-
-        # HACK: add an extra line for snacks image in windows
-        if self.options.image_provider == "snacks.nvim":
-            lines.append("")
 
         lines.insert(0, self._get_header_text(self.output))
         return lines, len(lines) - 1 + virtual_lines

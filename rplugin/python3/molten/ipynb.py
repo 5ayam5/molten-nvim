@@ -1,12 +1,14 @@
+import os
+from re import escape, match
 from typing import Dict
+
 from pynvim.api import Buffer, Nvim
+
 from molten.code_cell import CodeCell
 from molten.moltenbuffer import MoltenKernel
-import os
 from molten.outputbuffer import OutputBuffer
 from molten.outputchunks import ErrorOutputChunk, Output, OutputStatus, to_outputchunk
 from molten.position import DynamicPosition
-
 from molten.utils import MoltenException, notify_error, notify_info, notify_warn
 
 NOTEBOOK_VERSION = 4
@@ -50,7 +52,25 @@ def import_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str):
         while buf_line < len(buffer_contents):
             if len(nb_contents) == 0:
                 break  # out of while loop
-            if nb_contents[nb_line] != buffer_contents[buf_line]:
+
+            # HACK: assumes that magic starts with '%' or '!'
+            # (which is true for ipython, and most common use case)
+            has_magic = nb_contents[nb_line].lstrip().startswith("%")
+            magic_start = buffer_contents[buf_line].find("%")
+            has_shell_magic = nb_contents[nb_line].lstrip().startswith("!")
+            shell_magic_start = buffer_contents[buf_line].find("!")
+            if (
+                (
+                    not has_magic
+                    and not has_shell_magic
+                    and nb_contents[nb_line] != buffer_contents[buf_line]
+                )
+                or (has_magic and nb_contents[nb_line] != buffer_contents[buf_line][magic_start:])
+                or (
+                    has_shell_magic
+                    and nb_contents[nb_line] != buffer_contents[buf_line][shell_magic_start:]
+                )
+            ):
                 # move on to the next buffer line, but reset the nb_line
                 nb_line = 0
                 buf_line += 1
@@ -67,7 +87,9 @@ def import_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str):
                     output.status = OutputStatus.NEW
 
                 for output_data in cell["outputs"]:
-                    m_chunk, success = handle_output_types(nvim, output_data.get("output_type"), kernel, output_data)
+                    m_chunk, success = handle_output_types(
+                        nvim, output_data.get("output_type"), kernel, output_data
+                    )
                     output.chunks.append(m_chunk)
                     output.success &= success
 
@@ -115,6 +137,7 @@ def import_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str):
             nvim, f"Failed to load output for {failed} running cell that would be overridden"
         )
 
+
 def handle_output_types(nvim: Nvim, output_type: str, kernel: MoltenKernel, output_data):
     chunk = None
     success = True
@@ -123,12 +146,14 @@ def handle_output_types(nvim: Nvim, output_type: str, kernel: MoltenKernel, outp
             chunk = to_outputchunk(
                 nvim,
                 kernel.runtime._alloc_file,
-                { "text/plain": output_data.get("text") },
+                {"text/plain": output_data.get("text")},
                 output_data.get("metadata"),
                 kernel.options,
             )
         case "error":
-            chunk = ErrorOutputChunk(output_data["ename"], output_data["evalue"], output_data["traceback"])
+            chunk = ErrorOutputChunk(
+                output_data["ename"], output_data["evalue"], output_data["traceback"]
+            )
             chunk.extras = output_data
             success = False
         case _:
@@ -140,6 +165,7 @@ def handle_output_types(nvim: Nvim, output_type: str, kernel: MoltenKernel, outp
                 kernel.options,
             )
     return chunk, success
+
 
 def export_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str, overwrite: bool):
     """Export outputs of the current file/kernel to a .ipynb file with the given name."""
@@ -172,21 +198,27 @@ def export_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str, overwrite: b
 
             if compare_contents(nvim, nb_cell, code_cell, lang):
                 matched = True
-                outputs = [
-                    nbformat.v4.new_output(
-                        chunk.output_type,
-                        chunk.jupyter_data,
-                        **chunk.extras,
-                    )
-                    if chunk.jupyter_metadata is None
-                    else nbformat.v4.new_output(
-                        chunk.output_type,
-                        chunk.jupyter_data,
-                        metadata=chunk.jupyter_metadata,
-                        **chunk.extras,
-                    )
-                    for chunk in output.output.chunks
-                ]
+                outputs = []
+                for chunk in output.output.chunks:
+                    if "output_type" in chunk.extras.keys():
+                        chunk.extras.pop("output_type")
+                    if chunk.jupyter_metadata is None:
+                        outputs.append(
+                            nbformat.v4.new_output(
+                                chunk.output_type,
+                                chunk.jupyter_data,
+                                **chunk.extras,
+                            )
+                        )
+                    else:
+                        outputs.append(
+                            nbformat.v4.new_output(
+                                chunk.output_type,
+                                chunk.jupyter_data,
+                                metadata=chunk.jupyter_metadata,
+                                **chunk.extras,
+                            )
+                        )
                 nb_cell["outputs"] = outputs
                 nb_cell["execution_count"] = output.output.execution_count
                 break  # break out of the while loop
@@ -209,8 +241,34 @@ def export_outputs(nvim: Nvim, kernel: MoltenKernel, filepath: str, overwrite: b
 
 
 def compare_contents(nvim: Nvim, nb_cell, code_cell: CodeCell, lang: str) -> bool:
-    molten_contents = code_cell.get_text(nvim)
     nvim.exec_lua("_remove_comments = require('remove_comments').remove_comments")
+
     clean_nb = nvim.lua._remove_comments(nb_cell["source"] + "\n", lang)
+    clean_nb = clean_nb.splitlines()
+
+    molten_contents = code_cell.get_text(nvim)
+    molten_contents = molten_contents.splitlines()
+
+    # compare lines that have magic in the notebook
+    # with the corresponding lines in the molten buffer
+    # but uncomment them in the buffer if they are commented
+    comment_string: str = nvim.current.buffer.options["commentstring"]
+    if comment_string:
+        marker = comment_string.split("%s")[0].strip()
+        pattern = f"^{escape(marker)}\\s*(.*)$"
+
+        lines_with_magic = [
+            i
+            for (i, line) in enumerate(clean_nb)
+            if line.strip().startswith("%") or line.strip().startswith("!")
+        ]
+        for line in lines_with_magic:
+            if line < len(molten_contents):
+                found = match(pattern, molten_contents[line])
+                if found:
+                    molten_contents[line] = found.group(1)
+
+    clean_nb = "\n".join(clean_nb)
+    molten_contents = "\n".join(molten_contents)
     clean_molten = nvim.lua._remove_comments(molten_contents + "\n", lang)
     return clean_nb == clean_molten
